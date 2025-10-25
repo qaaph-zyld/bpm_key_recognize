@@ -11,3 +11,6 @@ build/
 *.egg-info/
 .pytest_cache/
 .ipynb_checkpoints/
+
+# Local Netlify folder
+.netlify

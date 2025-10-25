@@ -63,6 +63,12 @@ function reduceTo12(chroma) {
   return out;
 }
 
+function rms(arr) {
+  let s = 0;
+  for (let i = 0; i < arr.length; i++) { const x = arr[i]; s += x * x; }
+  return Math.sqrt(s / Math.max(1, arr.length));
+}
+
 function normDot(a, b) {
   let sa = 0, sb = 0, s = 0;
   for (let i = 0; i < a.length; i++) { const x=a[i]; const y=b[i]; sa += x*x; sb += y*y; s += x*y; }
@@ -109,21 +115,64 @@ function runKey(audioBuffer) {
     const maxSamples = Math.min(mono.length, Math.floor(sr * maxSeconds));
     const signal = mono.subarray(0, maxSamples);
 
+    // Configure extractor profile to match our frame size and sample rate
     const frameSize = 4096; const hopSize = 2048;
+    extractor.sampleRate = sr;
+    extractor.frameSize = frameSize;
+    // Clone and tweak profile
+    const prof = JSON.parse(JSON.stringify(extractor.profile));
+    prof.Windowing.size = frameSize;
+    prof.Spectrum.size = frameSize;
+    prof.SpectralPeaks.sampleRate = sr;
+    prof.SpectralWhitening.sampleRate = sr;
+    // Wider band and finer resolution HPCP
+    prof.HPCP.sampleRate = sr;
+    prof.HPCP.size = 36;
+    prof.HPCP.harmonics = 4;
+    prof.HPCP.referenceFrequency = 440;
+    prof.HPCP.minFrequency = 55; // A1
+    prof.HPCP.maxFrequency = Math.min(5000, sr / 2);
+
     const frames = essentia.FrameGenerator(signal, frameSize, hopSize);
 
-    let acc = null; let count = 0;
+    // Gather HPCP frames with gating, then use median aggregation
+    const hpcpFrames = [];
     for (let i = 0; i < frames.size(); i += 2) { // stride to speed up
-      const frame = frames.get(i);
-      const hpcp = extractor.hpcpExtractor(frame, sr);
-      if (!acc) acc = new Float32Array(hpcp.length).fill(0);
-      for (let k = 0; k < hpcp.length; k++) acc[k] += hpcp[k] || 0;
-      count++;
+      const frameVF = frames.get(i);
+      const frameArr = essentia.vectorToArray(frameVF);
+      if (rms(frameArr) < 0.01) continue; // gate out silence/low energy
+      const hpcp = extractor.hpcpExtractor(frameArr, sr, false, prof);
+      hpcpFrames.push(hpcp);
     }
-    if (!acc || count === 0) return { key: null, confidence: 0, method: 'hpcp+krumhansl' };
+    if (hpcpFrames.length === 0) return { key: null, confidence: 0, method: 'hpcp+krumhansl' };
 
-    for (let i = 0; i < acc.length; i++) acc[i] /= count;
-    const hpcp12 = reduceTo12(acc);
+    const bins = hpcpFrames[0].length;
+    const med = new Float32Array(bins);
+    for (let b = 0; b < bins; b++) {
+      const col = new Array(hpcpFrames.length);
+      for (let i = 0; i < hpcpFrames.length; i++) col[i] = hpcpFrames[i][b] || 0;
+      col.sort((x,y)=>x-y);
+      const mid = Math.floor(col.length / 2);
+      med[b] = col.length % 2 ? col[mid] : 0.5 * (col[mid - 1] + col[mid]);
+    }
+
+    const hpcp12 = reduceTo12(med);
+
+    // Try Essentia Key algorithm if available
+    try {
+      if (typeof essentia.Key === 'function') {
+        const v = essentia.arrayToVector(hpcp12);
+        const out = essentia.Key(v);
+        if (out && (out.key || out.scale)) {
+          const keyName = out.key && out.scale ? `${out.key} ${out.scale.toLowerCase()}` : (out.key || null);
+          const conf = (typeof out.strength === 'number') ? out.strength : (typeof out.firstToSecondRelativeStrength === 'number' ? out.firstToSecondRelativeStrength : 0);
+          return { key: keyName, confidence: conf, method: 'essentia-key' };
+        }
+      }
+    } catch (e) {
+      // Fall back to Krumhansl below
+    }
+
     const res = estimateKeyFromHPCPMean(hpcp12);
     return { key: res.key, confidence: res.confidence, method: 'hpcp+krumhansl' };
   } catch (err) {
