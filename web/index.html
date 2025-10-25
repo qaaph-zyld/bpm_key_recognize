@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BPM + Key Recognizer (Browser)</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <meta name="description" content="Detect BPM and musical key of audio directly in your browser. No uploads." />
+  <!-- Essentia.js (WASM) for high-quality music analysis (HPCP etc.) -->
+  <script src="https://cdn.jsdelivr.net/npm/essentia.js@latest/dist/essentia-wasm.web.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/essentia.js@latest/dist/essentia.js-core.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/essentia.js@latest/dist/essentia.js-extractor.js"></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>BPM + Key Recognizer</h1>
+      <p class="tagline">Runs entirely in your browser. Your audio never leaves your device.</p>
+    </header>
+
+    <section class="uploader" id="dropzone">
+      <input id="fileInput" type="file" accept="audio/*,.wav,.mp3,.m4a,.flac,.ogg" />
+      <p>Drag & drop an audio file here, or click to browse.</p>
+      <p class="hint">Recommended: short clips or stems. Long files may take longer to analyze.</p>
+    </section>
+
+    <section class="status" id="status">
+      <div class="status-line" id="statusText">Ready.</div>
+    </section>
+
+    <section class="results" id="results" hidden>
+      <div class="card">
+        <div class="label">File</div>
+        <div class="value" id="fileName">—</div>
+      </div>
+      <div class="card">
+        <div class="label">Estimated BPM</div>
+        <div class="value" id="bpmValue">—</div>
+        <div class="sub" id="bpmDetails"></div>
+      </div>
+      <div class="card">
+        <div class="label">Estimated Key</div>
+        <div class="value" id="keyValue">—</div>
+        <div class="sub" id="keyDetails"></div>
+      </div>
+    </section>
+
+    <footer>
+      <p>
+        Open source: <a href="https://github.com/qaaph-zyld/bpm_key_recognize" target="_blank" rel="noreferrer">bpm_key_recognize</a>
+      </p>
+    </footer>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
