@@ -156,12 +156,13 @@ function runKey(audioBuffer) {
       med[b] = col.length % 2 ? col[mid] : 0.5 * (col[mid - 1] + col[mid]);
     }
 
+    const hpcpMed = med; // 36-bin median HPCP
     const hpcp12 = reduceTo12(med);
 
-    // Try Essentia Key algorithm if available
+    // Try Essentia Key algorithm if available (prefer 36-bin input)
     try {
       if (typeof essentia.Key === 'function') {
-        const v = essentia.arrayToVector(hpcp12);
+        const v = essentia.arrayToVector(hpcpMed);
         const out = essentia.Key(v);
         if (out && (out.key || out.scale)) {
           const keyName = out.key && out.scale ? `${out.key} ${out.scale.toLowerCase()}` : (out.key || null);
